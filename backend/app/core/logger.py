@@ -2,11 +2,19 @@
 # app/core/logger.py
 from loguru import logger
 import sys, os, logging, uuid, time
-from typing import Optional
+from typing import Optional, Set
 from fastapi import Request, Response
 
 LOG_DIR = os.getenv("LOG_DIR", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
+
+_DEFAULT_SILENT_PATHS = {"/health", "/", "/robots.txt", "/favicon.ico"}
+_env_silent_paths = {
+    path.strip()
+    for path in os.getenv("LOG_SILENT_PATHS", "").split(",")
+    if path.strip()
+}
+SILENT_PATHS: Set[str] = _DEFAULT_SILENT_PATHS | _env_silent_paths
 
 # ---------- Loguru base ----------
 logger.remove()
@@ -60,12 +68,13 @@ async def request_logger_middleware(request: Request, call_next):
     trace_id = str(uuid.uuid4())
     request.state.trace_id = trace_id
     start = time.time()
+    path = request.url.path
 
     try:
         response: Response = await call_next(request)
     except Exception as e:
         # El handler global en errors.py también loguea, aquí agregamos contexto
-        logger.exception(f"[{trace_id}] Unhandled error on {request.method} {request.url.path}: {e}")
+        logger.exception(f"[{trace_id}] Unhandled error on {request.method} {path}: {e}")
         raise
 
     ms = (time.time() - start) * 1000
@@ -73,6 +82,9 @@ async def request_logger_middleware(request: Request, call_next):
     uid = extract_user_id(request) or "-"
     response.headers["X-Trace-Id"] = trace_id
 
-    logger.info(f"[{trace_id}] {request.method} {request.url.path} "
+    if path in SILENT_PATHS:
+        return response
+
+    logger.info(f"[{trace_id}] {request.method} {path} "
                 f"{response.status_code} {ms:.2f}ms ip={ip} user={uid}")
     return response
