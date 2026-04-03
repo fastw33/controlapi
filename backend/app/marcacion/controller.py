@@ -33,16 +33,21 @@ def listar_marcaciones(
     offset: Optional[int] = Query(None, ge=0),
     tipo: Optional[str] = Query(None, pattern="^(entrada|salida|on_almuerzo|off_almuerzo)$"),
     personal_id: Optional[int] = None,
+    documento: Optional[str] = Query(None),
     desde: Optional[datetime] = None,
     hasta: Optional[datetime] = None,
     response: Response = None,
     db: Session = Depends(get_db),
 ):
+    resolved_personal_id = personal_id
+    if documento is not None:
+        resolved_personal_id = marc_service.obtener_personal_id_por_documento(db, documento)
+
     effective_offset = offset if offset is not None else (page - 1) * limit
     total = marc_service.contar_con_personal(
         db,
         tipo=tipo,
-        personal_id=personal_id,
+        personal_id=resolved_personal_id,
         desde=desde,
         hasta=hasta,
     )
@@ -57,7 +62,7 @@ def listar_marcaciones(
         limit=limit,
         offset=effective_offset,
         tipo=tipo,
-        personal_id=personal_id,
+        personal_id=resolved_personal_id,
         desde=desde,
         hasta=hasta,
         include_evidencia_url=True,  # backend la expone; front decide si mostrarla

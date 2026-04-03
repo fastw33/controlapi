@@ -13,6 +13,7 @@ from app.marcacion.schema import (
     MarcacionAutoOut,
 )
 from app.marcacion.model import Marcacion
+from app.personal import repository as personal_repo
 from app.vectores.service import UMBRAL_COSENO as DEFAULT_UMBRAL_COSINE
 
 # Tipos permitidos (capa de servicio valida esto)
@@ -225,6 +226,20 @@ def obtener_con_personal(db: Session, marcacion_id: int) -> MarcacionWithPersona
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Marcación no encontrada")
     return _row_to_out(row, include_evidencia_url=True)
+
+
+def obtener_personal_id_por_documento(db: Session, documento: str) -> int:
+    doc = (documento or "").strip()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Documento es requerido")
+
+    personal = personal_repo.get_by_documento(db, doc)
+    if not personal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Personal no encontrado para el documento enviado",
+        )
+    return int(personal.id)
 
 # ---------- Registrar con personal_id ----------
 def registrar_con_personal(
