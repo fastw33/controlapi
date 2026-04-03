@@ -156,11 +156,34 @@ def _aware_bogota_to_naive(dt_bog: datetime) -> datetime:
     """
     return dt_bog.replace(tzinfo=None)
 
+
+def _row_to_out(row, *, include_evidencia_url: bool = True) -> MarcacionWithPersonalOut:
+    fh_bog = _to_bogota(row.fecha_hora)
+    creado_bog = _to_bogota(row.creado_en)
+    return MarcacionWithPersonalOut(
+        id=row.id,
+        personal_id=row.personal_id,
+        tipo=row.tipo,
+        fecha_hora=fh_bog,
+        dispositivo=row.dispositivo,
+        observacion=row.observacion,
+        justificacion=row.justificacion,
+        evidencia_url=(row.evidencia_url if include_evidencia_url else None),
+        aprobado=row.aprobado,
+        creado_en=creado_bog,
+        personal={
+            "id": row.personal_id,
+            "documento": row.documento,
+            "nombres": row.nombres,
+            "apellidos": row.apellidos,
+        },
+    )
+
 # ---------- Listado con datos de personal ----------
 def listar_con_personal(
     db: Session,
     *,
-    limit: int = 100,
+    limit: int = 20,
     offset: int = 0,
     tipo: Optional[str] = None,
     personal_id: Optional[int] = None,
@@ -177,33 +200,31 @@ def listar_con_personal(
         desde=desde,
         hasta=hasta,
     )
-    out: List[MarcacionWithPersonalOut] = []
-    for r in rows:
-        # Normalizamos a Bogotá (tratando naive como Bogotá)
-        fh_bog = _to_bogota(r.fecha_hora)
-        creado_bog = _to_bogota(r.creado_en)
+    return [_row_to_out(r, include_evidencia_url=include_evidencia_url) for r in rows]
 
-        out.append(
-            MarcacionWithPersonalOut(
-                id=r.id,
-                personal_id=r.personal_id,  # ← añadido
-                tipo=r.tipo,
-                fecha_hora=fh_bog,
-                dispositivo=r.dispositivo,
-                observacion=r.observacion,
-                justificacion=r.justificacion,
-                evidencia_url=(r.evidencia_url if include_evidencia_url else None),
-                aprobado=r.aprobado,
-                creado_en=creado_bog,
-                personal={
-                    "id": r.personal_id,
-                    "documento": r.documento,
-                    "nombres": r.nombres,
-                    "apellidos": r.apellidos,
-                },
-            )
-        )
-    return out
+
+def contar_con_personal(
+    db: Session,
+    *,
+    tipo: Optional[str] = None,
+    personal_id: Optional[int] = None,
+    desde: Optional[datetime] = None,
+    hasta: Optional[datetime] = None,
+) -> int:
+    return repo.count_with_personal(
+        db,
+        tipo=tipo,
+        personal_id=personal_id,
+        desde=desde,
+        hasta=hasta,
+    )
+
+
+def obtener_con_personal(db: Session, marcacion_id: int) -> MarcacionWithPersonalOut:
+    row = repo.get_with_personal(db, marcacion_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Marcación no encontrada")
+    return _row_to_out(row, include_evidencia_url=True)
 
 # ---------- Registrar con personal_id ----------
 def registrar_con_personal(

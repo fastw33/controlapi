@@ -2,7 +2,7 @@ from typing import Optional, List, Literal
 from datetime import datetime
 import os
 
-from fastapi import APIRouter, Depends, Query, UploadFile, File, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Query, UploadFile, File, Form, HTTPException, status, Response
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -28,24 +28,48 @@ UPLOAD_DIR = settings.storage_dir
 # =========================
 @router.get("", response_model=List[MarcacionFullOut])  # ← cambio de esquema
 def listar_marcaciones(
-    limit: Optional[int] = Query(None, ge=1, le=10000),
-    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, alias="limit", ge=1, le=20),
+    offset: Optional[int] = Query(None, ge=0),
     tipo: Optional[str] = Query(None, pattern="^(entrada|salida|on_almuerzo|off_almuerzo)$"),
     personal_id: Optional[int] = None,
     desde: Optional[datetime] = None,
     hasta: Optional[datetime] = None,
+    response: Response = None,
     db: Session = Depends(get_db),
 ):
+    effective_offset = offset if offset is not None else (page - 1) * limit
+    total = marc_service.contar_con_personal(
+        db,
+        tipo=tipo,
+        personal_id=personal_id,
+        desde=desde,
+        hasta=hasta,
+    )
+    if response is not None:
+        response.headers["X-Page"] = str(page)
+        response.headers["X-Page-Size"] = str(limit)
+        response.headers["X-Total-Count"] = str(total)
+        response.headers["X-Has-More"] = str(effective_offset + limit < total).lower()
+
     return marc_service.listar_con_personal(
         db,
         limit=limit,
-        offset=offset,
+        offset=effective_offset,
         tipo=tipo,
         personal_id=personal_id,
         desde=desde,
         hasta=hasta,
         include_evidencia_url=True,  # backend la expone; front decide si mostrarla
     )
+
+
+@router.get("/{marcacion_id}", response_model=MarcacionFullOut)
+def obtener_marcacion(
+    marcacion_id: int,
+    db: Session = Depends(get_db),
+):
+    return marc_service.obtener_con_personal(db, marcacion_id)
 
 
 # =========================
