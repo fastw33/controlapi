@@ -1,14 +1,35 @@
 # app/vectores/encoder.py
 from typing import Optional
+import os
+import shutil
+import threading
 import io
 import numpy as np
 from PIL import Image, ImageOps
 import cv2
+from zipfile import BadZipFile
 
 
 from insightface.app import FaceAnalysis
 
 _APP: Optional[FaceAnalysis] = None
+_APP_LOCK = threading.Lock()
+
+_MODEL_ROOT = os.getenv("INSIGHTFACE_HOME", os.path.expanduser("~/.insightface"))
+_MODEL_BASE_DIR = os.path.join(_MODEL_ROOT, "models")
+_MODEL_DIR = os.path.join(_MODEL_BASE_DIR, "buffalo_l")
+_MODEL_ZIP = os.path.join(_MODEL_BASE_DIR, "buffalo_l.zip")
+
+
+def _cleanup_corrupt_model_cache() -> None:
+    """Elimina artefactos del modelo para forzar descarga limpia en el siguiente intento."""
+    if os.path.isdir(_MODEL_DIR):
+        shutil.rmtree(_MODEL_DIR, ignore_errors=True)
+    if os.path.exists(_MODEL_ZIP):
+        try:
+            os.remove(_MODEL_ZIP)
+        except OSError:
+            pass
 
 def _get_app() -> FaceAnalysis:
     """
@@ -16,10 +37,26 @@ def _get_app() -> FaceAnalysis:
     Usa el modelo por defecto 'buffalo_l' (512D, normalizado).
     """
     global _APP
-    if _APP is None:
-        _APP = FaceAnalysis(name="buffalo_l")
-        # ctx_id=0 -> CPU; det_size ajusta la resolución del detector
-        _APP.prepare(ctx_id=0, det_size=(640, 640))
+    if _APP is not None:
+        return _APP
+
+    with _APP_LOCK:
+        if _APP is not None:
+            return _APP
+
+        for intento in range(2):
+            try:
+                app = FaceAnalysis(name="buffalo_l")
+                # ctx_id=0 -> CPU; det_size ajusta la resolución del detector
+                app.prepare(ctx_id=0, det_size=(640, 640))
+                _APP = app
+                return _APP
+            except BadZipFile:
+                if intento == 0:
+                    _cleanup_corrupt_model_cache()
+                    continue
+                raise
+
     return _APP
 
 

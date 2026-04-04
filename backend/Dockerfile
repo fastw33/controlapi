@@ -36,4 +36,4 @@ ENV INSIGHTFACE_HOME=/home/appuser/.insightface \
     PORT=3000
 
 # Arranque (formato shell como tu guía)
-CMD sh -c "gunicorn -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:${PORT:-3000} --timeout 60 --keep-alive 5 app.main:app"
+CMD sh -c "gunicorn -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:${PORT:-3000} --timeout 240 --keep-alive 5 app.main:app"
