@@ -26,3 +26,15 @@ class PersonalOut(BaseModel):
 
     class Config:
         from_attributes = True  # mapear desde ORM
+
+
+class HorarioOut(BaseModel):
+    """Esquema simplificado solo con horario"""
+    documento: str
+    nombres: str
+    apellidos: str
+    horario_int: Optional[time] = None
+    horario_off: Optional[time] = None
+
+    class Config:
+        from_attributes = True

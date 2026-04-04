@@ -22,3 +22,13 @@ def obtener_personal(db: Session, personal_id: int) -> Personal:
     if not obj:
         raise HTTPException(status_code=404, detail="Personal no encontrado")
     return obj
+
+def obtener_horario_por_documento(db: Session, documento: str) -> Personal:
+    """Obtiene el horario de una persona por documento"""
+    doc = (documento or "").strip()
+    if not doc:
+        raise HTTPException(status_code=400, detail="Documento es requerido")
+    obj = repository.get_by_documento(db, doc)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Personal no encontrado para el documento enviado")
+    return obj
